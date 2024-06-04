@@ -1,46 +1,69 @@
 const http = require('http');
-const countStudents = require('./3-read_file_async');
+const fs = require('fs');
 
-function homeHandeler(req, res) {
-  res.end('Hello Holberton School!');
-}
-
-function studentsHandeler(req, res) {
-  res.write('This is the list of our students\n');
-  countStudents(process.argv[2])
-    .then(({ fields, NumberOfStudents }) => {
-      res.write(`Number of students: ${NumberOfStudents}\n`);
-      let cnt = 0;
-      for (const [field, students] of Object.entries(fields)) {
-        res.write(`Number of students in ${field}: ${students.length}. List: ${students.join(', ')}`);
-        if (cnt !== Object.keys(fields).length - 1) res.write('\n');
-        cnt += 1;
+function countStudents(path) {
+  return new Promise((resolve, reject) => {
+    // eslint-disable-next-line consistent-return
+    fs.readFile(path, (error, dataBuffer) => {
+      if (error) {
+        return reject();
       }
-      res.end();
-    })
-    .catch((err) => {
-      res.write(err.message);
-      res.end();
+      const data = dataBuffer.toString().split('\n');
+      let count = 0;
+      const fields = {};
+
+      const firstnameIndex = data[0].split(',').indexOf('firstname');
+      const fieldIndex = data[0].split(',').indexOf('field');
+      // eslint-disable-next-line no-plusplus
+      for (let i = 1; i < data.length; i++) {
+        // eslint-disable-next-line no-continue
+        if (data[i] === '') continue;
+        // eslint-disable-next-line no-plusplus
+        count++;
+        const row = data[i].split(',');
+        if (fields[row[fieldIndex]]) {
+          fields[row[fieldIndex]].push(row[firstnameIndex]);
+        } else {
+          fields[row[fieldIndex]] = [row[firstnameIndex]];
+        }
+      }
+      let studentsData = 'This is the list of our students\n';
+      studentsData += `Number of students: ${count}\n`;
+
+      // eslint-disable-next-line guard-for-in
+      for (const field in fields) {
+        studentsData += `Number of students in ${field}: ${
+          fields[field].length
+        }. List: ${fields[
+          field
+          // eslint-disable-next-line comma-dangle
+        ].join(', ')}\n`;
+      }
+      resolve(studentsData.slice(0, -1));
     });
+  }).catch(() => {
+    throw new Error('Cannot load the database');
+  });
 }
-
-const port = 1245;
-const host = 'localhost';
-const routes = {
-  '/': homeHandeler,
-  '/students': studentsHandeler,
-};
-
-const app = (req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-
-  const { url } = req;
-  if (routes[url]) routes[url](req, res);
-};
-
-const server = http.createServer(app);
-server.listen(port, host, () => {
-  console.log(`Server is running on http://${host}:${port}`);
-});
-
+const app = http
+  // eslint-disable-next-line consistent-return
+  .createServer((req, res) => {
+    if (req.url === '/') {
+      res.setHeader('Content-Type', 'text/plain');
+      return res.end('Hello Holberton School!');
+    }
+    if (req.url === '/students') {
+      const path = process.argv[2];
+      countStudents(path)
+        .then((data) => {
+          res.setHeader('Content-Type', 'text/plain');
+          res.end(data);
+        })
+        .catch((error) => {
+          res.setHeader('Content-Type', 'text/plain');
+          res.end(`This is the list of our students\n${error.message}`);
+        });
+    }
+  })
+  .listen(1245);
 module.exports = app;
